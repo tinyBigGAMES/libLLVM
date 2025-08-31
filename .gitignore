@@ -80,3 +80,9 @@ __recovery/
 
 # Boss dependency manager vendor folder https://github.com/HashLoad/boss
 modules/
+_checkpoint.cmd
+bin/output/HelloWorld.ll
+bin/output/HelloWorld.obj
+changes-diff.cmd
+changes.diff
+zip_latest_commit.cmd
