@@ -180,6 +180,7 @@ begin
   // === Linking Phase ===
   LArgs := [
     'lld-link',
+    '/verbose',
     '/nologo',
     '/subsystem:console',
     '/entry:main',
