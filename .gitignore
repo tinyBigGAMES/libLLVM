@@ -89,3 +89,4 @@ changes-diff.cmd
 changes.diff
 zip_latest_commit.cmd
 !/bin/libs/*
+checkpoint.zip
