@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Repo Update** (2025-08-31 – jarroddavis68)
+  - Rename libLLVM.pas to libLLVM.API.pas
+  - Added libLLVM.pas, TLLVM class,  a fluent API around LLVAM API
+  - Added comprehensive test suite for testing libLLVM framework
+
 - **Create FUNDING.yml** (2025-08-31 – Jarrod Davis)
 
 
