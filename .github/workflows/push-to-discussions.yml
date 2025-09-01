@@ -1,4 +1,4 @@
-name: Push → Discussion (GraphQL)
+name: Push → Discussion (gh cli)
 
 on:
   push:
@@ -10,114 +10,135 @@ permissions:
   discussions: write
 
 env:
-  DISCUSSIONS_CATEGORY: Push Updates  # must match the category name in your repo
+  DISCUSSIONS_CATEGORY: Push Updates
 
 jobs:
   post:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # gh uses this
     steps:
-      - name: Create a discussion for this push
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const { owner, repo } = context.repo;
-            const desiredName = (process.env.DISCUSSIONS_CATEGORY || "").trim();
+      - name: Build title and body from push payload
+        id: build
+        run: |
+          set -euo pipefail
 
-            // 1) GraphQL: get repo id + discussion categories
-            const query = `
-              query($owner: String!, $name: String!) {
-                repository(owner: $owner, name: $name) {
-                  id
-                  hasDiscussionsEnabled
-                  discussionCategories(first: 50) {
-                    nodes { id name }
-                  }
+          EV="$GITHUB_EVENT_PATH"
+
+          OWNER="${GITHUB_REPOSITORY%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+
+          BRANCH="$(jq -r '.ref' "$EV" | sed 's#^refs/heads/##')"
+          [ -z "$BRANCH" ] && BRANCH="(unknown)"
+
+          PUSHER="$(jq -r '.pusher.name // .sender.login // "unknown"' "$EV")"
+
+          BEFORE="$(jq -r '.before' "$EV")"
+          AFTER="$(jq -r '.after' "$EV")"
+          COMPARE="$(jq -r '.compare // empty' "$EV")"
+          if [ -z "$COMPARE" ]; then
+            COMPARE="https://github.com/${OWNER}/${REPO}/compare/${BEFORE}...${AFTER}"
+          fi
+
+          COMMIT_COUNT="$(jq -r '.commits | length' "$EV")"
+
+          # Commit list (first line of message, author, link)
+          COMMITS_MD="$(jq -r '
+            if (.commits | length) == 0 then
+              ""
+            else
+              [.commits[]
+                | "- [`\(.id[0:7])`](\(.url)) \((.message // "" ) | split("\n")[0]) — _\(.author.name // "unknown")_"
+              ] | join("\n")
+            end
+          ' "$EV")"
+
+          TITLE="Push to ${BRANCH} by ${PUSHER} — ${COMMIT_COUNT} commit"
+          [ "$COMMIT_COUNT" -ne 1 ] && TITLE="${TITLE}s"
+
+          {
+            echo "> _This discussion was created automatically by GitHub Actions from a \`push\` event._"
+            echo
+            echo "**Branch:** \`${BRANCH}\`"
+            echo "**Pusher:** ${PUSHER}"
+            echo "**Compare:** ${COMPARE}"
+            echo
+            echo "### Commits"
+            if [ -n "$COMMITS_MD" ]; then
+              echo "$COMMITS_MD"
+            else
+              echo "_No commit details available._"
+            fi
+            echo
+            echo "<sub>— end of automated log —</sub>"
+          } > body.md
+
+          echo "title<<EOF" >> $GITHUB_OUTPUT
+          echo "$TITLE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Resolve repo & category IDs via GraphQL
+        id: ids
+        run: |
+          set -euo pipefail
+          OWNER="${GITHUB_REPOSITORY%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+
+          # Query repo info + categories
+          RESP="$(gh api graphql -f query='
+            query($owner:String!, $name:String!){
+              repository(owner:$owner, name:$name){
+                id
+                hasDiscussionsEnabled
+                discussionCategories(first:50){
+                  nodes{ id name }
                 }
               }
-            `;
-            let repoInfo;
-            try {
-              repoInfo = await github.graphql(query, { owner, name: repo });
-            } catch (e) {
-              core.setFailed(\`GraphQL repo/category lookup failed: \${e.message}\`);
-              return;
-            }
+            }' -f owner="$OWNER" -f name="$REPO")"
 
-            const repository = repoInfo?.repository;
-            if (!repository) {
-              core.setFailed("Repository not found by GraphQL; check owner/repo context.");
-              return;
-            }
-            if (!repository.hasDiscussionsEnabled) {
-              core.setFailed("Discussions are not enabled for this repository (Settings → General → Features → Discussions).");
-              return;
-            }
+          REPO_ID="$(echo "$RESP" | jq -r '.data.repository.id')"
+          DISC_ENABLED="$(echo "$RESP" | jq -r '.data.repository.hasDiscussionsEnabled')"
+          [ "$DISC_ENABLED" != "true" ] && { echo "Discussions not enabled"; exit 1; }
 
-            const categories = repository.discussionCategories?.nodes || [];
-            const category = categories.find(c => c.name.toLowerCase() === desiredName.toLowerCase());
-            if (!category) {
-              const names = categories.map(c => `- ${c.name}`).join("\n") || "(none found)";
-              core.setFailed(`Category "${desiredName}" not found.\nAvailable categories:\n${names}`);
-              return;
-            }
+          CAT_NAME="${DISCUSSIONS_CATEGORY}"
+          CAT_ID="$(echo "$RESP" | jq -r --arg n "$CAT_NAME" '
+            .data.repository.discussionCategories.nodes[]
+            | select((.name|ascii_downcase)==($n|ascii_downcase))
+            | .id
+          ')"
 
-            // 2) Build title/body from push payload
-            const push = context.payload;
-            const branch = (push.ref || "").replace("refs/heads/", "") || "(unknown)";
-            const pusher = push.pusher?.name || push.sender?.login || "unknown";
-            const commits = push.commits || [];
-            const commitCount = commits.length;
+          if [ -z "$CAT_ID" ]; then
+            echo "Available categories:"
+            echo "$RESP" | jq -r '.data.repository.discussionCategories.nodes[].name'
+            echo "Category \"$CAT_NAME\" not found."
+            exit 1
+          fi
 
-            const title = `Push to ${branch} by ${pusher} — ${commitCount} commit${commitCount === 1 ? "" : "s"}`;
+          echo "repo_id=$REPO_ID" >> $GITHUB_OUTPUT
+          echo "cat_id=$CAT_ID" >> $GITHUB_OUTPUT
 
-            const lines = commits.map(c => {
-              const sha7 = (c.id || "").slice(0,7);
-              const first = (c.message || "").split("\n")[0];
-              const author = c.author?.name || "unknown";
-              const url = c.url || \`https://github.com/${owner}/${repo}/commit/\${c.id}\`;
-              return `- [\`${sha7}\`](${url}) ${first} — _${author}_`;
-            });
+      - name: Create discussion
+        run: |
+          set -euo pipefail
+          TITLE="${{ steps.build.outputs.title }}"
+          REPO_ID="${{ steps.ids.outputs.repo_id }}"
+          CAT_ID="${{ steps.ids.outputs.cat_id }}"
+          BODY_CONTENT="$(cat body.md)"
 
-            const compareUrl =
-              push.compare ||
-              \`https://github.com/${owner}/${repo}/compare/\${push.before}...\${push.after}\`;
-
-            const body = [
-              `> _This discussion was created automatically by GitHub Actions from a \`push\` event._`,
-              "",
-              `**Branch:** \`${branch}\``,
-              `**Pusher:** ${pusher}`,
-              `**Compare:** ${compareUrl}`,
-              "",
-              "### Commits",
-              lines.length ? lines.join("\n") : "_No commit details available._",
-              "",
-              "<sub>— end of automated log —</sub>"
-            ].join("\n");
-
-            // 3) GraphQL: create discussion
-            const mutation = `
-              mutation($repoId: ID!, $catId: ID!, $title: String!, $body: String!) {
-                createDiscussion(input: {
-                  repositoryId: $repoId,
-                  categoryId: $catId,
-                  title: $title,
-                  body: $body
-                }) {
-                  discussion { url }
+          gh api graphql \
+            -f query='
+              mutation($repoId:ID!, $catId:ID!, $title:String!, $body:String!){
+                createDiscussion(input:{
+                  repositoryId:$repoId,
+                  categoryId:$catId,
+                  title:$title,
+                  body:$body
+                }){
+                  discussion{ url }
                 }
-              }
-            `;
-            try {
-              const res = await github.graphql(mutation, {
-                repoId: repository.id,
-                catId: category.id,
-                title,
-                body
-              });
-              const url = res?.createDiscussion?.discussion?.url;
-              core.info(\`Created discussion: \${url}\`);
-            } catch (e) {
-              core.setFailed(\`Failed to create discussion via GraphQL: \${e.message}\`);
-            }
+              }' \
+            -f repoId="$REPO_ID" \
+            -f catId="$CAT_ID" \
+            -f title="$TITLE" \
+            -f body="$BODY_CONTENT" \
+            --jq '.data.createDiscussion.discussion.url'
