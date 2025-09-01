@@ -1,16 +1,16 @@
-name: Push → Discussion
+name: Push → Discussion (GraphQL)
 
 on:
   push:
     branches: ['**']
-  workflow_dispatch: {}   # allows manual run for testing
+  workflow_dispatch: {}
 
 permissions:
   contents: read
   discussions: write
 
 env:
-  DISCUSSIONS_CATEGORY: Push Updates   # must match the category name in Discussions
+  DISCUSSIONS_CATEGORY: Push Updates  # must match the category name in your repo
 
 jobs:
   post:
@@ -24,32 +24,45 @@ jobs:
             const { owner, repo } = context.repo;
             const desiredName = (process.env.DISCUSSIONS_CATEGORY || "").trim();
 
-            // 1) Fetch categories
-            let categories;
+            // 1) GraphQL: get repo id + discussion categories
+            const query = `
+              query($owner: String!, $name: String!) {
+                repository(owner: $owner, name: $name) {
+                  id
+                  hasDiscussionsEnabled
+                  discussionCategories(first: 50) {
+                    nodes { id name }
+                  }
+                }
+              }
+            `;
+            let repoInfo;
             try {
-              const res = await github.request(
-                "GET /repos/{owner}/{repo}/discussions/categories",
-                { owner, repo }
-              );
-              categories = res.data || [];
+              repoInfo = await github.graphql(query, { owner, name: repo });
             } catch (e) {
-              core.setFailed(`Failed to fetch categories: ${e.message}`);
+              core.setFailed(\`GraphQL repo/category lookup failed: \${e.message}\`);
               return;
             }
 
-            // 2) Find category
-            const category = categories.find(
-              c => c.name.toLowerCase() === desiredName.toLowerCase()
-            );
+            const repository = repoInfo?.repository;
+            if (!repository) {
+              core.setFailed("Repository not found by GraphQL; check owner/repo context.");
+              return;
+            }
+            if (!repository.hasDiscussionsEnabled) {
+              core.setFailed("Discussions are not enabled for this repository (Settings → General → Features → Discussions).");
+              return;
+            }
+
+            const categories = repository.discussionCategories?.nodes || [];
+            const category = categories.find(c => c.name.toLowerCase() === desiredName.toLowerCase());
             if (!category) {
-              const names = categories.map(c => `- ${c.name} (id: ${c.id})`).join("\n");
-              core.setFailed(
-                `Category "${desiredName}" not found.\nAvailable categories:\n${names}`
-              );
+              const names = categories.map(c => `- ${c.name}`).join("\n") || "(none found)";
+              core.setFailed(`Category "${desiredName}" not found.\nAvailable categories:\n${names}`);
               return;
             }
 
-            // 3) Build discussion content
+            // 2) Build title/body from push payload
             const push = context.payload;
             const branch = (push.ref || "").replace("refs/heads/", "") || "(unknown)";
             const pusher = push.pusher?.name || push.sender?.login || "unknown";
@@ -62,12 +75,13 @@ jobs:
               const sha7 = (c.id || "").slice(0,7);
               const first = (c.message || "").split("\n")[0];
               const author = c.author?.name || "unknown";
-              return `- [\`${sha7}\`](${c.url}) ${first} — _${author}_`;
+              const url = c.url || \`https://github.com/${owner}/${repo}/commit/\${c.id}\`;
+              return `- [\`${sha7}\`](${url}) ${first} — _${author}_`;
             });
 
             const compareUrl =
               push.compare ||
-              `https://github.com/${owner}/${repo}/compare/${push.before}...${push.after}`;
+              \`https://github.com/${owner}/${repo}/compare/\${push.before}...\${push.after}\`;
 
             const body = [
               `> _This discussion was created automatically by GitHub Actions from a \`push\` event._`,
@@ -82,13 +96,28 @@ jobs:
               "<sub>— end of automated log —</sub>"
             ].join("\n");
 
-            // 4) Create the discussion
+            // 3) GraphQL: create discussion
+            const mutation = `
+              mutation($repoId: ID!, $catId: ID!, $title: String!, $body: String!) {
+                createDiscussion(input: {
+                  repositoryId: $repoId,
+                  categoryId: $catId,
+                  title: $title,
+                  body: $body
+                }) {
+                  discussion { url }
+                }
+              }
+            `;
             try {
-              const { data: discussion } = await github.request(
-                "POST /repos/{owner}/{repo}/discussions",
-                { owner, repo, title, body, category_id: category.id }
-              );
-              core.info(`Created discussion: ${discussion.html_url}`);
+              const res = await github.graphql(mutation, {
+                repoId: repository.id,
+                catId: category.id,
+                title,
+                body
+              });
+              const url = res?.createDiscussion?.discussion?.url;
+              core.info(\`Created discussion: \${url}\`);
             } catch (e) {
-              core.setFailed(`Failed to create discussion: ${e.message}`);
+              core.setFailed(\`Failed to create discussion via GraphQL: \${e.message}\`);
             }
