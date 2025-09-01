@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Changed
+- **Repo Update** (2025-09-01 – jarroddavis68)
+  - Moved high level LLD support to libLLVM.LLD unit
+  - Updated LLDLink to capture StdOut and StdErr strings
+
 - **Repo Update** (2025-08-31 – jarroddavis68)
   - Include the missing [bin\libs] folder
 
