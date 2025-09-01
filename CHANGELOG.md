@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Changed
+- **Merge branch 'main' of https://github.com/tinyBigGAMES/libLLVM** (2025-09-01 – jarroddavis68)
+
+- **Update .gitignore** (2025-09-01 – jarroddavis68)
+
 - **Repo Update** (2025-09-01 – jarroddavis68)
   - Moved high level LLD support to libLLVM.LLD unit
   - Updated LLDLink to capture StdOut and StdErr strings
@@ -30,4 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Initial commit
 
 - **Initial commit** (2025-08-31 – Jarrod Davis)
+
+
+### Removed
+- **Remove file from repo and update .gitignore** (2025-09-01 – jarroddavis68)
 
