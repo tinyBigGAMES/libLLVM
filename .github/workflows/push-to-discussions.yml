@@ -1,0 +1,94 @@
+name: Push → Discussion
+
+on:
+  push:
+    branches:
+      - '**'   # change to [ main ] if you only want main pushes
+
+permissions:
+  contents: read
+  discussions: write   # needed to create discussions
+
+env:
+  # Must match an existing Discussions category in this repo
+  DISCUSSIONS_CATEGORY: Push Updates
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create a discussion for this push
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const core = require("@actions/core");
+            const { owner, repo } = context.repo;
+            const push = context.payload;
+
+            // --- 1) Find category by name ---
+            const desiredName = (process.env.DISCUSSIONS_CATEGORY || "").trim();
+            const { data: categories } = await github.request(
+              "GET /repos/{owner}/{repo}/discussions/categories",
+              { owner, repo }
+            );
+            if (!categories?.length) {
+              core.setFailed("No Discussions categories found. Enable Discussions and create at least one category.");
+              return;
+            }
+            const category = categories.find(c => c.name.toLowerCase() === desiredName.toLowerCase()) || categories[0];
+
+            // --- 2) Build title/body from push payload ---
+            const branch = (push.ref || "").replace("refs/heads/", "");
+            const pusher =
+              push.pusher?.name ||
+              push.sender?.login ||
+              "unknown";
+
+            const commits = push.commits || [];
+            const commitCount = commits.length;
+
+            // Title like: "Push to main by Jarrod — 3 commits"
+            const title = `Push to ${branch || "(unknown branch)"} by ${pusher} — ${commitCount} commit${commitCount === 1 ? "" : "s"}`;
+
+            // Each commit: short sha, first-line message, author, link
+            const lines = [];
+            for (const c of commits) {
+              const sha7 = (c.id || "").substring(0, 7);
+              const firstLine = (c.message || "").split("\n")[0];
+              const author = c.author?.name || "unknown";
+              const url = c.url || `https://github.com/${owner}/${repo}/commit/${c.id}`;
+              lines.push(`- [\`${sha7}\`](${url}) ${firstLine} — _${author}_`);
+            }
+
+            // Compare URL (payload usually provides it)
+            const compareUrl =
+              push.compare ||
+              `https://github.com/${owner}/${repo}/compare/${push.before}...${push.after}`;
+
+            // Top banner + details + footer
+            const body = [
+              `> _This discussion was created automatically by GitHub Actions from a \`push\` event._`,
+              "",
+              `**Branch:** \`${branch}\``,
+              `**Pusher:** ${pusher}`,
+              `**Compare:** ${compareUrl}`,
+              "",
+              "### Commits",
+              lines.length ? lines.join("\n") : "_No commit details available._",
+              "",
+              "<sub>— end of automated log —</sub>"
+            ].join("\n");
+
+            // --- 3) Create the Discussion ---
+            const { data: discussion } = await github.request(
+              "POST /repos/{owner}/{repo}/discussions",
+              {
+                owner,
+                repo,
+                title,
+                body,
+                category_id: category.id
+              }
+            );
+
+            core.info(`Created discussion: ${discussion.html_url}`);

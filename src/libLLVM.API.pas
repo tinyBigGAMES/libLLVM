@@ -1,4 +1,3 @@
-
 {===============================================================================
       _ _ _    _    _ __   ____  __ ™
      | (_) |__| |  | |\ \ / /  \/  |
@@ -39,10 +38,11 @@
  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
  ------------------------------------------------------------------------------
- 
+
  This library uses the following open-source libraries:
-   * LLVM - https://github.com/llvm/llvm-project
- 
+   * Dlluminator - https://github.com/tinyBigGAMES/Dlluminator
+   * LLVM        - https://github.com/llvm/llvm-project
+
 ===============================================================================}
 
 unit libLLVM.API;
@@ -2426,111 +2426,7 @@ var
   LLVMPassBuilderOptionsSetMergeFunctions: procedure(Options: LLVMPassBuilderOptionsRef; MergeFunctions: LLVMBool); cdecl;
   LLVMPassBuilderOptionsSetInlinerThreshold: procedure(Options: LLVMPassBuilderOptionsRef; Threshold: Integer); cdecl;
   LLVMDisposePassBuilderOptions: procedure(Options: LLVMPassBuilderOptionsRef); cdecl;
-
-
-/// <summary>
-/// Invokes the LLD linker (via the combined LLVM-C + LLD DLL) with the given command-line
-/// arguments and linker <c>AFlavor</c>, returning LLD’s process-style exit code and whether
-/// the linker may be safely called again within the same process.
-/// </summary>
-///
-/// <param name="AArgs">
-/// Command-line tokens to forward to LLD as <c>argv</c>. This should mirror what you would
-/// pass to the command-line tools (e.g., <c>lld-link</c>, <c>ld.lld</c>, <c>ld64.lld</c>, <c>wasm-ld</c>).
-/// <para>
-/// If the first element is missing or starts with <c>-</c>/<c>/</c>, the wrapper inserts a suitable
-/// tool token for <c>AFlavor</c> as <c>argv[0]</c>. Valid defaults are:
-/// <list type="bullet">
-///   <item><description><c>coff</c> → <c>lld-link</c></description></item>
-///   <item><description><c>elf</c>  → <c>ld.lld</c></description></item>
-///   <item><description><c>macho</c>/<c>darwin</c> → <c>ld64.lld</c></description></item>
-///   <item><description><c>wasm</c> → <c>wasm-ld</c></description></item>
-///   <item><description><c>mingw</c> → <c>ld.lld</c></description></item>
-/// </list>
-/// </para>
-/// <para>
-/// All tokens are marshaled as UTF-8 and passed verbatim to LLD. Include your object files,
-/// libraries, and options (e.g., <c>/out:app.exe</c>, <c>/subsystem:console</c>,
-/// <c>/libpath:...</c>, <c>kernel32.lib</c>, <c>ucrt.lib</c>, <c>vcruntime.lib</c>,
-/// <c>legacy_stdio_definitions.lib</c>, etc.).
-/// </para>
-/// </param>
-///
-/// <param name="AFlavor">
-/// Linker “driver” to invoke: <c>coff</c>, <c>elf</c>, <c>macho</c>, <c>wasm</c>, or <c>mingw</c>
-/// (case-insensitive). If empty, LLD auto-detects based on <c>argv[0]</c> and inputs.
-/// </param>
-///
-/// <param name="ACanRunAgain">
-/// <c>True</c> if LLD reports it is safe to call again in the same process; <c>False</c> if a
-/// fatal/unsafe condition was detected (e.g., crash-recovery scenario). If <c>False</c>,
-/// do not invoke LLD again in this process—restart a helper process instead.
-/// </param>
-///
-/// <returns>
-/// LLD’s exit code (0 = success; non-zero = failure). Typical link errors return 1 with
-/// diagnostics emitted by LLD (enable <c>/verbose</c> to increase detail).
-/// </returns>
-///
-/// <remarks>
-/// <para><b>Requirements:</b> The combined DLL must export <c>LLD_Link</c> and the relevant LLD drivers
-/// must be linked in (e.g., <c>lldCOFF</c>, <c>lldELF</c>, <c>lldMachO</c>, <c>lldWasm</c>, <c>lldMinGW</c>, plus <c>lldCommon</c>).</para>
-/// <para><b>CRT/SDK:</b> For COFF, ensure the correct CRT set is provided:
-/// <list type="bullet">
-///   <item><description><b>Dynamic (/MD)</b>: <c>ucrt.lib</c>, <c>vcruntime.lib</c>, <c>legacy_stdio_definitions.lib</c>, <c>kernel32.lib</c></description></item>
-///   <item><description><b>Static (/MT)</b>: <c>libucrt.lib</c>, <c>libvcruntime.lib</c>, <c>libcmt.lib</c>, <c>legacy_stdio_definitions.lib</c>, <c>kernel32.lib</c></description></item>
-/// </list>
-/// Add appropriate <c>/libpath:</c> entries (VC Tools, UCRT, WinSDK) if the libs aren’t in the working directory.
-/// </para>
-/// <para><b>argv[0] and flavor:</b> LLD uses either <c>AFlavor</c> or the tool name in <c>argv[0]</c> to select a driver. This
-/// wrapper guarantees a valid <c>argv[0]</c> when missing.</para>
-/// <para><b>Thread-safety:</b> Treat calls as serialized with respect to LLD. If you need concurrency,
-/// isolate each link in a separate process.</para>
-/// <para><b>Diagnostics:</b> This wrapper does not intercept stdout/stderr. LLD prints errors/warnings
-/// to the process streams. Use <c>/verbose</c> (COFF) or the equivalent flags for other drivers to
-/// diagnose missing libs/symbols and path issues.</para>
-/// </remarks>
-///
-/// <example>
-/// <code lang="delphi">
-/// // COFF (dynamic CRT)
-/// var Can: Boolean; RC: Integer;
-/// RC := LLDLink([
-///   'lld-link',
-///   '/nologo',
-///   '/subsystem:console',
-///   '/entry:mainCRTStartup',
-///   '/out:C:\temp\hello.exe',
-///   '/libpath:C:\VS\VC\Tools\MSVC\14.3x\lib\x64',
-///   '/libpath:C:\Windows Kits\10\Lib\10.0.x\um\x64',
-///   '/libpath:C:\Windows Kits\10\Lib\10.0.x\ucrt\x64',
-///   'C:\temp\hello.obj',
-///   'kernel32.lib','ucrt.lib','vcruntime.lib','legacy_stdio_definitions.lib',
-///   '/verbose'
-/// ], 'coff', Can);
-/// </code>
-/// </example>
-///
-/// <example>
-/// <code lang="delphi">
-/// // COFF (static CRT, /MT)
-/// var Can: Boolean; RC: Integer;
-/// RC := LLDLink([
-///   'lld-link','/nologo','/subsystem:console','/entry:mainCRTStartup',
-///   '/out:C:\temp\hello.exe','C:\temp\hello.obj',
-///   'kernel32.lib','libucrt.lib','libvcruntime.lib','libcmt.lib','legacy_stdio_definitions.lib'
-/// ], 'coff', Can);
-/// </code>
-/// </example>
-///
-/// <example>
-/// <code lang="delphi">
-/// // ELF
-/// var Can: Boolean; RC: Integer;
-/// RC := LLDLink(['ld.lld','-o','/tmp/hello','/tmp/hello.o','--fatal-warnings'], 'elf', Can);
-/// </code>
-/// </example>
-function LLDLink(const AArgs: array of string; const AFlavor: string; out ACanRunAgain: Boolean): Integer;
+  LLD_Link: function(argc: Integer; argv: PPUTF8Char; const flavor: PUTF8Char; canRunAgain: PInteger): Integer; cdecl;
 
 procedure GetExports(const aDLLHandle: THandle);
 
@@ -2539,6 +2435,7 @@ implementation
 procedure GetExports(const aDLLHandle: THandle);
 begin
   if aDllHandle = 0 then Exit;
+  LLD_Link := GetProcAddress(aDLLHandle, 'LLD_Link');
   LLVMABIAlignmentOfType := GetProcAddress(aDLLHandle, 'LLVMABIAlignmentOfType');
   LLVMABISizeOfType := GetProcAddress(aDLLHandle, 'LLVMABISizeOfType');
   LLVMAddAlias2 := GetProcAddress(aDLLHandle, 'LLVMAddAlias2');
@@ -3831,66 +3728,6 @@ end;
 
 var
   DepsDLLHandle: THandle = 0;
-  LLD_Link: function(argc: Integer; argv: PPUTF8Char; const flavor: PUTF8Char; canRunAgain: PInteger): Integer; cdecl;  
-
-function LLDLink(const AArgs: array of string; const AFlavor: string; out ACanRunAgain: Boolean): Integer;
-var
-  LUTF8Args: TArray<UTF8String>;
-  LArgv: TArray<PUTF8Char>;
-  LFlavorUTF8: UTF8String;
-  LCan: Integer;
-  LIdx: Integer;
-  LArg0: UTF8String;
-begin
-  ACanRunAgain := False;
-
-  if Length(AArgs) > 0 then
-  begin
-    // Allocate arrays: UTF8 strings for storage, pointers for argv
-    SetLength(LUTF8Args, Length(AArgs));
-    SetLength(LArgv, Length(AArgs) + 1);  // +1 for null terminator
-
-    // Convert each argument and store both string and pointer
-    for LIdx := 0 to High(AArgs) do
-    begin
-      LUTF8Args[LIdx] := UTF8String(AArgs[LIdx]);
-      LArgv[LIdx] := PUTF8Char(LUTF8Args[LIdx]);
-    end;
-
-    // Null-terminate the argv array
-    LArgv[High(LArgv)] := nil;
-  end
-  else
-  begin
-    // Handle empty args case with default tool names
-    if SameText(AFlavor, 'elf') then
-      LArg0 := UTF8String('ld.lld')
-    else if SameText(AFlavor, 'macho') or SameText(AFlavor, 'darwin') then
-      LArg0 := UTF8String('ld64.lld')
-    else if SameText(AFlavor, 'wasm') then
-      LArg0 := UTF8String('wasm-ld')
-    else
-      LArg0 := UTF8String('lld-link');
-
-    SetLength(LUTF8Args, 1);
-    SetLength(LArgv, 2);  // 1 arg + null terminator
-    LUTF8Args[0] := LArg0;
-    LArgv[0] := PUTF8Char(LUTF8Args[0]);
-    LArgv[1] := nil;  // Null terminator
-  end;
-
-  // Convert flavor string
-  if AFlavor <> '' then
-    LFlavorUTF8 := UTF8String(AFlavor)
-  else
-    LFlavorUTF8 := UTF8String('');
-
-  LCan := 0;
-
-  // Call with proper argc count (excludes null terminator)
-  Result := LLD_Link(Length(LUTF8Args), @LArgv[0], PUTF8Char(LFlavorUTF8), @LCan);
-  ACanRunAgain := LCan <> 0;
-end;
 
 procedure LoadDLL();
 var
@@ -3922,7 +3759,6 @@ begin
     LResStream.Free();
   end;
   GetExports(DepsDLLHandle);
-  LLD_Link := GetProcAddress(DepsDLLHandle, 'LLD_Link');  
 end;
 
 procedure UnloadDLL();

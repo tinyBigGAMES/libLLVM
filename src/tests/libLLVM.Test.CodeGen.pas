@@ -21,6 +21,7 @@ uses
   System.AnsiStrings,
   System.Classes,
   libLLVM.API,
+  libLLVM.LLD,
   libLLVM.Utils,
   libLLVM;
 
@@ -80,6 +81,8 @@ var
   LArgs: TArray<string>;
   LRC: Integer;
   LCan: Boolean;
+  LStdOut: string;
+  LStdErr: string;
 
   // String conversion helpers
   LStrLen: Cardinal;
@@ -181,13 +184,20 @@ begin
     'legacy_stdio_definitions.lib'
   ];
 
-  LRC := LLDLink(LArgs, 'coff', LCan);
+  LRC := LLDLink(LArgs, 'coff', LStdOut, LStdErr, LCan);
+
+  if not LStdOut.IsEmpty then
+    TLLUtils.PrintLn(LStdOut);
+
+  if not LStdErr.IsEmpty then
+    TLLUtils.PrintLn(LStdErr);
 
   // === Results ===
-  Writeln(Format('LLD rc=%d canRunAgain=%s', [LRC, BoolToStr(LCan, True)]));
-  Writeln('LL file:  ' + LLLFile);
-  Writeln('OBJ file: ' + LObjFile);
-  Writeln('EXE file: ' + LExeFile);
+  TLLUtils.PrintLn('LLD rc=%d canRunAgain=%s', [LRC, BoolToStr(LCan, True)]);
+  TLLUtils.PrintLn('LL file:  %s', [LLLFile]);
+  TLLUtils.PrintLn('OBJ file: %s', [LObjFile]);
+  TLLUtils.PrintLn('EXE file: %s', [LExeFile]);
+  TLLUtils.PrintLn();
 end;
 
 end.

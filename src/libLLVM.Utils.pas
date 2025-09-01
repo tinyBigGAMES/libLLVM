@@ -40,7 +40,8 @@
  ------------------------------------------------------------------------------
 
  This library uses the following open-source libraries:
-   * LLVM - https://github.com/llvm/llvm-project
+   * Dlluminator - https://github.com/tinyBigGAMES/Dlluminator
+   * LLVM        - https://github.com/llvm/llvm-project
 
 ===============================================================================}
 

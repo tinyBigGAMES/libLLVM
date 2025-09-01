@@ -136,6 +136,7 @@
         <DCCReference Include="..\..\src\tests\libLLVM.Test.Values.pas"/>
         <DCCReference Include="..\..\src\tests\libLLVM.Test.Variable.pas"/>
         <DCCReference Include="..\..\src\tests\libLLVM.Test.CodeGen.pas"/>
+        <DCCReference Include="..\..\src\libLLVM.LLD.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
