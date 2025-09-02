@@ -143,7 +143,7 @@ LRC := LLDLink(LWasmArgs, 'wasm', LCanRunAgain);
 6. **Link with LLD** for final executable generation
 
 ## Projects using libLLVM  
-Here is a list of project using libLLVM. If you would like your project featured, get in touch!
+Here’s a list of projects built with libLLVM. Want yours featured? Get in touch or add it and submit a PR!
 - [LLVM-Simple-Calculator](https://github.com/hsauro/LLVM-Simple-Calculator)  
 - [LLVM-Simple-Calculator-Using-TLLVM](https://github.com/hsauro/LLVM-Simple-Calculator-Using-TLLVM)
 
