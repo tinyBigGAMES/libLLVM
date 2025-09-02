@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Update README.md** (2025-09-02 – jarroddavis68)
+  - Update "Projects using libLLVM" section with message that you can also add your project to the list and submit a PR.
+
 - **Repo Update** (2025-08-31 – jarroddavis68)
   - Rename libLLVM.pas to libLLVM.API.pas
   - Added libLLVM.pas, TLLVM class,  a fluent API around LLVAM API
@@ -17,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Changed
+- **Merge branch 'main' of https://github.com/tinyBigGAMES/libLLVM** (2025-09-02 – jarroddavis68)
+
 - **Update README.md** (2025-09-02 – jarroddavis68)
   - Updated project using libLLVM list
 
