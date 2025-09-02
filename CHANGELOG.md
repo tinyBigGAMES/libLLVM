@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Changed
+- **Update README.md** (2025-09-02 – jarroddavis68)
+
 - **Merge branch 'main' of https://github.com/tinyBigGAMES/libLLVM** (2025-09-02 – jarroddavis68)
 
 - **Update README.md** (2025-09-02 – jarroddavis68)
