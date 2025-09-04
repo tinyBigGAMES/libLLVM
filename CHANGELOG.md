@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Repo Update** (2025-09-04 – jarroddavis68)
+  - Add TLLVM.CompileModuleToObject() method for single module compilation
+  - Add TLLVM.CompileAllModulesToObjects() method for batch compilation
+  - Add TLLVM.GetObjectFileExtension() class method for platform-specific extensions
+  - Add libLLVM.Test.ObjectCompilation unit with comprehensive test coverage
+  - Add TestSingleModuleCompilation() test method
+  - Add TestBatchModuleCompilation() test method
+  - Add TestOptimizationLevels() test method
+  - Add TestFileExtensions() test method
+  - Add TestOutputDirectories() test method
+  - Add TestErrorConditions() test method
+  - Add TestFileVerification() test method
+  - Modernize all file operations to use TFile/TDirectory/TPath APIs
+  - Implement consistent ModuleId + extension filename strategy
+  - Add automatic directory creation for output paths
+
 - **Update README.md** (2025-09-02 – jarroddavis68)
   - Update "Projects using libLLVM" section with message that you can also add your project to the list and submit a PR.
 
@@ -20,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Changed
+- **Merge branch 'main' of https://github.com/tinyBigGAMES/libLLVM** (2025-09-04 – jarroddavis68)
+
 - **Merge branch 'main' of https://github.com/tinyBigGAMES/libLLVM** (2025-09-03 – jarroddavis68)
 
 - **Update libLLVM.pas** (2025-09-03 – jarroddavis68)
