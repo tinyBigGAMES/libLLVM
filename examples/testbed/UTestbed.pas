@@ -37,7 +37,8 @@ uses
   libLLVM.Test.Comparison,
   libLLVM.Test.Bitwise,
   libLLVM.Test.BasicBlock,
-  libLLVM.Test.Arithmetic;
+  libLLVM.Test.Arithmetic,
+  libLLVM.Test.ObjectCompilation;
 
 procedure RunTests();
 var
@@ -48,7 +49,7 @@ begin
     TLLUtils.PrintLn('Running LLVM v%s', [TLLVM.GetLLVMVersionStr()]);
     TLLUtils.PrintLn();
 
-    LNum := 15;
+    LNum := 22;
 
     case LNum of
       01: TTestArithmetic.RunAllTests();
@@ -66,6 +67,15 @@ begin
       13: TTestValues.RunAllTests();
       14: TTestVariable.RunAllTests();
       15: TTestCodeGen.RunAllTests();
+
+      16: TTestObjectCompilation.TestSingleModuleCompilation();
+      17: TTestObjectCompilation.TestBatchModuleCompilation();
+      18: TTestObjectCompilation.TestOptimizationLevels();
+      19: TTestObjectCompilation.TestFileExtensions();
+      20: TTestObjectCompilation.TestOutputDirectories();
+      21: TTestObjectCompilation.TestErrorConditions();
+      22: TTestObjectCompilation.TestFileVerification();
+
     else
       TLLUtils.Print('Invalid test number.');
     end;

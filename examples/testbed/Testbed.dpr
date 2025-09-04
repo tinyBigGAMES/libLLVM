@@ -39,7 +39,8 @@ uses
   libLLVM.Test.Values in '..\..\src\tests\libLLVM.Test.Values.pas',
   libLLVM.Test.Variable in '..\..\src\tests\libLLVM.Test.Variable.pas',
   libLLVM.Test.CodeGen in '..\..\src\tests\libLLVM.Test.CodeGen.pas',
-  libLLVM.LLD in '..\..\src\libLLVM.LLD.pas';
+  libLLVM.LLD in '..\..\src\libLLVM.LLD.pas',
+  libLLVM.Test.ObjectCompilation in '..\..\src\tests\libLLVM.Test.ObjectCompilation.pas';
 
 begin
   RunTests();

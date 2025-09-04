@@ -52,6 +52,7 @@ unit libLLVM;
 interface
 
 uses
+  WinApi.Windows,
   System.Types,
   System.SysUtils,
   System.AnsiStrings,
@@ -59,6 +60,7 @@ uses
   System.Classes,
   System.Rtti,
   System.Math,
+  System.IOUtils,
   System.Generics.Collections,
   libLLVM.API,
   libLLVM.Utils;
@@ -110,6 +112,14 @@ type
     ccCDecl,        // LLVMCCallConv
     ccStdCall,      // LLVMX86StdcallCallConv
     ccFastCall      // LLVMX86FastcallCallConv
+  );
+
+  { TLLOptimization }
+  TLLOptimization = (
+    olDebug,        // No optimization - best for debugging
+    olSize,         // Optimize for size/compile speed
+    olSpeed,        // Balanced speed optimization (default)
+    olMaximum       // Maximum optimization
   );
 
   { TLLParam }
@@ -164,6 +174,7 @@ type
     function GetBasicType(const ABasicType: TLLDataType; const AContext: LLVMContextRef): LLVMTypeRef;
     function GetLLVMCallingConv(const ACallingConv: TLLCallingConv): LLVMCallConv;
     function GetLLVMLinkage(const AVisibility: TLLVisibility): LLVMLinkage;
+    function GetLLVMOptLevel(const AOptLevel: TLLOptimization): LLVMCodeGenOptLevel;
     {$HINTS OFF}
     function LLVMTypeToBasicType(ALLVMType: LLVMTypeRef): TLLDataType;
     {$HINTS ON}
@@ -202,6 +213,13 @@ type
     function GetModuleIR(const AModuleId: string): string;
     function ValidateModule(const AModuleId: string): Boolean;
     function GetRequiredLibraries(const AModuleId: string): TArray<string>;
+    
+    // Object file compilation
+    class function GetObjectFileExtension(): string; static;
+    function CompileModuleToObject(const AModuleId: string; const AOutputPath: string = ''; 
+      const AOptLevel: TLLOptimization = olSpeed): string;
+    function CompileAllModulesToObjects(const AOutputDirectory: string; 
+      const AOptLevel: TLLOptimization = olSpeed): TArray<string>;
     
     // Function declaration
     function BeginFunction(const AModuleId: string; const AFunctionName: string; const AReturnType: TLLDataType;
@@ -488,6 +506,19 @@ begin
   Result := Format('%d.%d.%d', [LMajor, LMinor, LPatch]);
 end;
 
+class function TLLVM.GetObjectFileExtension(): string;
+begin
+  {$IFDEF MSWINDOWS}
+  Result := '.obj';
+  {$ELSE}
+    {$IFDEF DARWIN}
+    Result := '.o';
+    {$ELSE}
+    Result := '.o';  // Linux and other Unix-like systems
+    {$ENDIF}
+  {$ENDIF}
+end;
+
 function TLLVM.SetTargetPlatform(const ATriple: string; const ADataLayout: string): TLLVM;
 begin
   FTargetTriple := ATriple;
@@ -560,6 +591,18 @@ begin
     vExternal: Result := LLVMExternalLinkage;
   else
     Result := LLVMExternalLinkage;
+  end;
+end;
+
+function TLLVM.GetLLVMOptLevel(const AOptLevel: TLLOptimization): LLVMCodeGenOptLevel;
+begin
+  case AOptLevel of
+    olDebug: Result := LLVMCodeGenLevelNone;
+    olSize: Result := LLVMCodeGenLevelLess;
+    olSpeed: Result := LLVMCodeGenLevelDefault;
+    olMaximum: Result := LLVMCodeGenLevelAggressive;
+  else
+    Result := LLVMCodeGenLevelDefault;
   end;
 end;
 
@@ -837,6 +880,101 @@ begin
   end
   else
     SetLength(Result, 0);
+end;
+
+function TLLVM.CompileModuleToObject(const AModuleId: string; const AOutputPath: string; 
+  const AOptLevel: TLLOptimization): string;
+var
+  LModuleState: TLLModuleState;
+  LTargetMachine: LLVMTargetMachineRef;
+  LTarget: LLVMTargetRef;
+  LTriple: PAnsiChar;
+  LCPU: PAnsiChar;
+  LFeatures: PAnsiChar;
+  LError: PAnsiChar;
+  LOutputDir: string;
+  LFileName: string;
+  LFullPath: string;
+begin
+  LModuleState := GetModuleState(AModuleId);
+  
+  // Always auto-generate filename from module ID
+  LFileName := TPath.ChangeExtension(AModuleId, GetObjectFileExtension());
+  
+  // Handle directory - default to current if empty
+  if AOutputPath = '' then
+    LOutputDir := TDirectory.GetCurrentDirectory()
+  else
+    LOutputDir := AOutputPath;
+    
+  // Ensure directory exists
+  if not TDirectory.Exists(LOutputDir) then
+    TDirectory.CreateDirectory(LOutputDir);
+  
+  // Combine directory + filename using TPath
+  LFullPath := TPath.Combine(LOutputDir, LFileName);
+  
+  // Get target information  
+  LTriple := LLVMGetDefaultTargetTriple();
+  LCPU := LLVMGetHostCPUName();
+  LFeatures := LLVMGetHostCPUFeatures();
+  
+  try
+    // Find target for triple
+    if LLVMGetTargetFromTriple(LTriple, @LTarget, @LError) <> 0 then
+    begin
+      LLVMDisposeMessage(LError);
+      raise Exception.CreateFmt('Failed to get target for triple %s', [string(UTF8String(LTriple))]);
+    end;
+    
+    // Create target machine
+    LTargetMachine := LLVMCreateTargetMachine(LTarget, LTriple, LCPU, LFeatures, 
+      GetLLVMOptLevel(AOptLevel), LLVMRelocDefault, LLVMCodeModelDefault);
+    if LTargetMachine = nil then
+      raise Exception.Create('Failed to create target machine');
+    
+    try
+      // Emit to object file
+      if LLVMTargetMachineEmitToFile(LTargetMachine, LModuleState.Module, 
+        PAnsiChar(AnsiString(LFullPath)), LLVMObjectFile, @LError) <> 0 then
+      begin
+        LLVMDisposeMessage(LError);
+        raise Exception.CreateFmt('Failed to emit object file: %s', [LFullPath]);
+      end;
+      
+      Result := LFullPath;
+    finally
+      LLVMDisposeTargetMachine(LTargetMachine);
+    end;
+  finally
+    LLVMDisposeMessage(LTriple);
+    LLVMDisposeMessage(LCPU);
+    LLVMDisposeMessage(LFeatures);
+  end;
+end;
+
+function TLLVM.CompileAllModulesToObjects(const AOutputDirectory: string; 
+  const AOptLevel: TLLOptimization): TArray<string>;
+var
+  LModulePair: TPair<string, TLLModuleState>;
+  LResults: TList<string>;
+begin
+  LResults := TList<string>.Create();
+  try
+    // Ensure output directory exists
+    if not TDirectory.Exists(AOutputDirectory) then
+      TDirectory.CreateDirectory(AOutputDirectory);
+    
+    // Compile each module
+    for LModulePair in FModules do
+    begin
+      LResults.Add(CompileModuleToObject(LModulePair.Key, AOutputDirectory, AOptLevel));
+    end;
+    
+    Result := LResults.ToArray();
+  finally
+    LResults.Free();
+  end;
 end;
 
 // Function declaration
