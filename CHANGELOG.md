@@ -63,6 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Initial commit** (2025-08-31 – Jarrod Davis)
 
 
+### Fixed
+- **Repo Update** (2025-09-03 – jarroddavis68)
+  - Fix range check error with negative integers in ExtractLLVMValue()
+
+
 ### Removed
 - **Remove file from repo and update .gitignore** (2025-09-01 – jarroddavis68)
 
