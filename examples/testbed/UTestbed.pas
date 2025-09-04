@@ -49,7 +49,7 @@ begin
     TLLUtils.PrintLn('Running LLVM v%s', [TLLVM.GetLLVMVersionStr()]);
     TLLUtils.PrintLn();
 
-    LNum := 22;
+    LNum := 16;
 
     case LNum of
       01: TTestArithmetic.RunAllTests();
@@ -67,14 +67,7 @@ begin
       13: TTestValues.RunAllTests();
       14: TTestVariable.RunAllTests();
       15: TTestCodeGen.RunAllTests();
-
-      16: TTestObjectCompilation.TestSingleModuleCompilation();
-      17: TTestObjectCompilation.TestBatchModuleCompilation();
-      18: TTestObjectCompilation.TestOptimizationLevels();
-      19: TTestObjectCompilation.TestFileExtensions();
-      20: TTestObjectCompilation.TestOutputDirectories();
-      21: TTestObjectCompilation.TestErrorConditions();
-      22: TTestObjectCompilation.TestFileVerification();
+      16: TTestObjectCompilation.RunAllTests();
 
     else
       TLLUtils.Print('Invalid test number.');
