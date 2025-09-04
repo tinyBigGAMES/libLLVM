@@ -600,16 +600,6 @@ begin
 end;
 
 // Direct TValue <-> LLVM conversion (NO TPaValue!)
-
-procedure test1();
-begin
-end;
-
-procedure test2();
-begin
-end;
-
-
 function TLLVM.ExtractLLVMValue(const AModuleId: string; const AValue: TValue): LLVMValueRef;
 var
   LModuleState: TLLModuleState;
