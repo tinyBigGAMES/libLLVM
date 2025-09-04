@@ -476,7 +476,7 @@ begin
   begin
     try
       CreateModule('void_test')
-      
+
       // Global variables for side effect demonstration
       .DeclareGlobal('void_test', 'counter', dtInt32, 0)
       .DeclareGlobal('void_test', 'accumulator', dtInt32, 0)
@@ -580,6 +580,8 @@ begin
       Free();
     end;
   end;
+
+  writeln('got there');
 end;
 
 (**

@@ -56,7 +56,7 @@ begin
       03: TTestBitwise.RunAllTests();
       04: TTestComparison.RunAllTests();
       05: TTestControlFlow.RunAllTests();
-      //06: TTestFunctionCall.RunAllTests();  // TODO: fix range check error
+      06: TTestFunctionCall.RunAllTests();
       07: TTestFunction.RunAllTests();
       08: TTestJIT.RunAllTests();
       09: TTestMemory.RunAllTests();

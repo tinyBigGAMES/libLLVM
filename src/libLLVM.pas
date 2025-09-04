@@ -600,12 +600,22 @@ begin
 end;
 
 // Direct TValue <-> LLVM conversion (NO TPaValue!)
+
+procedure test1();
+begin
+end;
+
+procedure test2();
+begin
+end;
+
+
 function TLLVM.ExtractLLVMValue(const AModuleId: string; const AValue: TValue): LLVMValueRef;
 var
   LModuleState: TLLModuleState;
 begin
   LModuleState := GetModuleState(AModuleId);
-  
+
   if AValue.IsEmpty then
     raise Exception.Create('Cannot convert empty TValue to LLVM value')
   else if AValue.IsType<LLVMValueRef> then
@@ -613,9 +623,9 @@ begin
   else if AValue.IsType<string> then
     Result := ExtractLLVMValue(AModuleId, StringValue(AModuleId, AValue.AsString))
   else if AValue.IsType<Integer> then
-    Result := LLVMConstInt(GetBasicType(dtInt32, LModuleState.Context), AValue.AsInteger, 1)
+    Result := LLVMConstInt(GetBasicType(dtInt32, LModuleState.Context), UInt64(AValue.AsInteger), 1)
   else if AValue.IsType<Int64> then
-    Result := LLVMConstInt(GetBasicType(dtInt64, LModuleState.Context), AValue.AsInt64, 1)
+    Result := LLVMConstInt(GetBasicType(dtInt64, LModuleState.Context), UInt64(AValue.AsInt64), 1)
   else if AValue.IsType<Boolean> then
     Result := LLVMConstInt(GetBasicType(dtInt1, LModuleState.Context), Ord(AValue.AsBoolean), 0)
   else if AValue.IsType<Double> then
