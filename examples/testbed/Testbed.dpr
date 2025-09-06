@@ -40,7 +40,9 @@ uses
   libLLVM.Test.Variable in '..\..\src\tests\libLLVM.Test.Variable.pas',
   libLLVM.Test.CodeGen in '..\..\src\tests\libLLVM.Test.CodeGen.pas',
   libLLVM.LLD in '..\..\src\libLLVM.LLD.pas',
-  libLLVM.Test.ObjectCompilation in '..\..\src\tests\libLLVM.Test.ObjectCompilation.pas';
+  libLLVM.Test.ObjectCompilation in '..\..\src\tests\libLLVM.Test.ObjectCompilation.pas',
+  libLLVM.MetaLang in '..\..\src\libLLVM.MetaLang.pas',
+  libLLVM.Test.MetaLang in '..\..\src\tests\libLLVM.Test.MetaLang.pas';
 
 begin
   RunTests();

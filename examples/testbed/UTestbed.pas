@@ -21,8 +21,10 @@ implementation
 
 uses
   System.SysUtils,
+  System.IOUtils,
   libLLVM,
   libLLVM.Utils,
+  libLLVM.MetaLang,
   libLLVM.Test.CodeGen,
   libLLVM.Test.Variable,
   libLLVM.Test.Values,
@@ -38,7 +40,22 @@ uses
   libLLVM.Test.Bitwise,
   libLLVM.Test.BasicBlock,
   libLLVM.Test.Arithmetic,
-  libLLVM.Test.ObjectCompilation;
+  libLLVM.Test.ObjectCompilation,
+  libLLVM.Test.MetaLang;
+
+// Test add_two_numbers DLL created by Test #17, make sure you run it first
+{$WARN SYMBOL_PLATFORM OFF}
+function add_two_numbers(a, b: int32): int32; cdecl; external 'simple_math.dll' delayed;
+{$WARN SYMBOL_PLATFORM ON}
+procedure test_add_two_numbers_dll();
+begin
+  if not TFile.Exists('simple_math.dll') then
+  begin
+    raise Exception.Create('You must run Test #17 first');
+  end;
+
+  TLLUtils.PrintLn('10 + 10 = %d', [add_two_numbers(10, 10)]);
+end;
 
 procedure RunTests();
 var
@@ -49,7 +66,7 @@ begin
     TLLUtils.PrintLn('Running LLVM v%s', [TLLVM.GetLLVMVersionStr()]);
     TLLUtils.PrintLn();
 
-    LNum := 16;
+    LNum := 17;
 
     case LNum of
       01: TTestArithmetic.RunAllTests();
@@ -68,6 +85,8 @@ begin
       14: TTestVariable.RunAllTests();
       15: TTestCodeGen.RunAllTests();
       16: TTestObjectCompilation.RunAllTests();
+      17: TTestMetaLang.RunAllTests();
+      18: test_add_two_numbers_dll();
 
     else
       TLLUtils.Print('Invalid test number.');

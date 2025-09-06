@@ -192,8 +192,8 @@ type
     function LookupSymbolFast(const AModuleState: TLLModuleState; const ASymbol: AnsiString): Pointer;
     function CreateLLJITForModule(var AModuleState: TLLModuleState): Boolean;
 
-    class procedure Initialize(); static;
-    class procedure Finalize; static;
+    class procedure Startup(); static;
+    class procedure Shutdown(); static;
 
   public
     constructor Create();
@@ -302,6 +302,7 @@ type
       const AValueName: string = ''): TValue; overload;  // Most user-friendly
     function CallFunction(const AModuleId: string; const AFunctionName: string; const AArgs: array of TValue; 
       const AValueName: string = ''): TValue; overload;  // Type control
+    function HasFunction(const AModuleId: string; const AFunctionName: string): Boolean;
       
     // Memory operations (use TValue - simple!)
     function SetValue(const AModuleId: string; const AVarName: string; const AValue: TValue): TLLVM;
@@ -326,12 +327,13 @@ type
     function AddExternalDLL(const AModuleId: string; const ADllPath: string): TLLVM;
     function DefineAbsoluteSymbol(const AModuleId: string; const ASymbol: AnsiString; AAddress: Pointer): TLLVM;
     function LookupSymbol(const AModuleId: string; const ASymbol: AnsiString): Pointer;
+    function ResetJIT(const AModuleId: string): TLLVM;
   end;
 
 implementation
 
 { TLLVM }
-class procedure TLLVM.Initialize();
+class procedure TLLVM.Startup();
 var
   LContext: LLVMContextRef;
   LModule: LLVMModuleRef;
@@ -426,7 +428,7 @@ begin
   LLVMContextDispose(LContext);
 end;
 
-class procedure TLLVM.Finalize();
+class procedure TLLVM.Shutdown();
 begin
   LLVMShutdown();
 end;
@@ -434,7 +436,7 @@ end;
 constructor TLLVM.Create;
 begin
   inherited Create();
-  Randomize; 
+  Randomize;
   FModules := TDictionary<string, TLLModuleState>.Create();
   FModuleLibraries := TDictionary<string, TDictionary<string, Boolean>>.Create();
 end;
@@ -472,19 +474,19 @@ begin
       if Assigned(LModuleState.Context) and (LContexts.IndexOf(LModuleState.Context) = -1) then
         LContexts.Add(LModuleState.Context);
     end;
-    
+
     for LContext in LContexts do
       LLVMContextDispose(LContext);
   finally
     LContexts.Free();
   end;
-  
+
   FModules.Free();
-  
+
   for LLibDict in FModuleLibraries.Values do
     LLibDict.Free();
   FModuleLibraries.Free();
-    
+
   inherited Destroy();
 end;
 
@@ -848,17 +850,6 @@ begin
       LErrorMsg := string(UTF8String(LError));
       LLVMDisposeMessage(LError);
     end;
-  end;
-    
-  // Initialize JIT after successful validation (ONE TIME ONLY!)
-  if Result then
-  begin
-    EnsureJITReady(AModuleId);
-  end
-  else
-  begin
-    // Force JIT initialization even if validation failed (for external functions)
-    EnsureJITReady(AModuleId);
   end;
 end;
 
@@ -1948,6 +1939,16 @@ begin
   Result := CreateTValue(LResult);
 end;
 
+function TLLVM.HasFunction(const AModuleId: string; const AFunctionName: string): Boolean;
+var
+  LModuleState: TLLModuleState;
+  LFunction: LLVMValueRef;
+begin
+  LModuleState := GetModuleState(AModuleId);
+  LFunction := LLVMGetNamedFunction(LModuleState.Module, PAnsiChar(AnsiString(AFunctionName)));
+  Result := Assigned(LFunction);
+end;
+
 // Memory operations
 function TLLVM.SetValue(const AModuleId: string; const AVarName: string; const AValue: TValue): TLLVM;
 var
@@ -2378,9 +2379,11 @@ var
 begin
   LModuleState := GetModuleState(AModuleId);
   
-  // JIT should already be ready - just check
-  if not LModuleState.IsJITInitialized then
-    raise Exception.CreateFmt('Module %s JIT not initialized - call ValidateModule first', [AModuleId]);
+  // Lazy JIT initialization - initialize only when needed for execution
+  EnsureJITReady(AModuleId);
+  
+  // Reload state after potential JIT initialization
+  LModuleState := GetModuleState(AModuleId);
   
   // Fast lookup for main function
   LMainPtr := LookupSymbolFast(LModuleState, 'main');
@@ -2406,9 +2409,11 @@ var
 begin
   LModuleState := GetModuleState(AModuleId);
   
-  // JIT should already be ready - just check
-  if not LModuleState.IsJITInitialized then
-    raise Exception.CreateFmt('Module %s JIT not initialized - call ValidateModule first', [AModuleId]);
+  // Lazy JIT initialization - initialize only when needed for execution
+  EnsureJITReady(AModuleId);
+  
+  // Reload state after potential JIT initialization
+  LModuleState := GetModuleState(AModuleId);
   
   // Fast lookup - no initialization overhead!
   LFuncPtr := LookupSymbolFast(LModuleState, AnsiString(AFunctionName));
@@ -2462,13 +2467,10 @@ var
   LGP: AnsiChar;
   LMsg: PAnsiChar;
 begin
-  LModuleState := GetModuleState(AModuleId);
+  // Lazy JIT initialization - initialize only when needed for process symbols
+  EnsureJITReady(AModuleId);
   
-  if not LModuleState.IsJITInitialized then
-  begin
-    Result := Self;
-    Exit;
-  end;
+  LModuleState := GetModuleState(AModuleId);
 
   LGP := LLVMOrcLLJITGetGlobalPrefix(LModuleState.LLJIT);
   LErr := LLVMOrcCreateDynamicLibrarySearchGeneratorForProcess(@LGen, LGP, nil, nil);
@@ -2499,19 +2501,16 @@ begin
   // Add to module's library list (existing functionality)
   AddLibraryToModule(AModuleId, ADllPath);
   
-  LModuleState := GetModuleState(AModuleId);
-  
-  if not LModuleState.IsJITInitialized then
-  begin
-    Result := Self;
-    Exit;
-  end;
-  
   if ADllPath = '' then
   begin
     Result := Self;
     Exit;
   end;
+
+  // Lazy JIT initialization - initialize only when needed for external DLL
+  EnsureJITReady(AModuleId);
+  
+  LModuleState := GetModuleState(AModuleId);
 
   LGP := LLVMOrcLLJITGetGlobalPrefix(LModuleState.LLJIT);
   LErr := LLVMOrcCreateDynamicLibrarySearchGeneratorForPath(
@@ -2551,9 +2550,12 @@ var
   LErr: LLVMErrorRef;
   LMsg: PAnsiChar;
 begin
+  // Lazy JIT initialization - initialize only when needed for absolute symbols
+  EnsureJITReady(AModuleId);
+  
   LModuleState := GetModuleState(AModuleId);
   
-  if (not LModuleState.IsJITInitialized) or (AAddress = nil) or (ASymbol = '') then
+  if (AAddress = nil) or (ASymbol = '') then
   begin
     Result := Self;
     Exit;
@@ -2592,18 +2594,52 @@ var
 begin
   LModuleState := GetModuleState(AModuleId);
   
-  if not LModuleState.IsJITInitialized then
-  begin
-    Result := nil;
-    Exit;
-  end;
+  // Lazy JIT initialization - initialize only when needed for symbol lookup
+  EnsureJITReady(AModuleId);
+  
+  // Reload state after potential JIT initialization
+  LModuleState := GetModuleState(AModuleId);
   
   Result := LookupSymbolFast(LModuleState, ASymbol);
 end;
 
+function TLLVM.ResetJIT(const AModuleId: string): TLLVM;
+var
+  LModuleState: TLLModuleState;
+begin
+  LModuleState := GetModuleState(AModuleId);
+  
+  // Dispose existing JIT components if they exist
+  if Assigned(LModuleState.LLJIT) then
+  begin
+    LLVMOrcDisposeLLJIT(LModuleState.LLJIT);
+    LModuleState.LLJIT := nil;
+  end;
+  
+  if Assigned(LModuleState.ThreadSafeContext) then
+  begin
+    LLVMOrcDisposeThreadSafeContext(LModuleState.ThreadSafeContext);
+    LModuleState.ThreadSafeContext := nil;
+  end;
+  
+  if Assigned(LModuleState.JITContext) then
+  begin
+    LLVMContextDispose(LModuleState.JITContext);
+    LModuleState.JITContext := nil;
+  end;
+  
+  // Reset initialization flag - forces fresh JIT creation
+  LModuleState.IsJITInitialized := False;
+  LModuleState.LastError := '';
+  
+  SetModuleState(AModuleId, LModuleState);
+  Result := Self;
+end;
+
 initialization
-  TLLVM.Initialize();
+  TLLVM.Startup();
 
 finalization
-  TLLVM.Finalize();
+  TLLVM.Shutdown();
+
 end.

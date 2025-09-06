@@ -91,3 +91,4 @@ zip_latest_commit.cmd
 !/bin/libs/*
 checkpoint.zip
 bin/output
+bin/view.txt
